@@ -1,10 +1,14 @@
-
-const CACHE_NAME = 'ai-trivia-quiz-v5'; // Incremented version
+const CACHE_NAME = 'ai-trivia-quiz-v3';
 const urlsToCache = [
   '/',
   '/index.html',
   '/index.tsx',
   '/App.tsx',
+  '/types.ts',
+  '/services/geminiService.ts',
+  '/components/QuizCard.tsx',
+  '/components/Scoreboard.tsx',
+  '/components/LoadingSpinner.tsx',
   '/manifest.json',
   '/icon.svg',
   'https://cdn.tailwindcss.com'
@@ -22,8 +26,14 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests for caching. API calls to Gemini are POST and will be ignored.
+  // Only handle GET requests
   if (event.request.method !== 'GET') {
+    return;
+  }
+
+  // Do not cache API calls. Always fetch them from the network.
+  if (event.request.url.includes('/api/')) {
+    event.respondWith(fetch(event.request));
     return;
   }
 
