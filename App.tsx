@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { GoogleGenAI, Type } from "@google/genai";
 
 // --- FROM types.ts ---
 type AnswerKey = 'A' | 'B' | 'C' | 'D';
@@ -131,52 +130,26 @@ const DifficultySelector: React.FC<DifficultySelectorProps> = ({ onSelectDifficu
 };
 
 /**
- * AI Service Initialization
- * This initializes the Google GenAI client. It relies on the API_KEY being available
- * as an environment variable, which is a secure practice.
- */
-const apiKey = process.env.API_KEY;
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
-
-/**
- * Fetches a trivia question directly from the Google Gemini API.
+ * Fetches a trivia question from our own secure backend API endpoint.
+ * This function runs in the browser and calls the Vercel serverless function.
  */
 async function generateTriviaQuestion(difficulty: Difficulty): Promise<TriviaQuestion> {
-  if (!ai) {
-    throw new Error("API key is not configured. Please ensure the API_KEY environment variable is set.");
-  }
-
-  const triviaQuestionSchema = {
-    type: Type.OBJECT,
-    properties: {
-      question: { type: Type.STRING, description: "The trivia question text." },
-      options: {
-        type: Type.OBJECT,
-        properties: {
-          A: { type: Type.STRING },
-          B: { type: Type.STRING },
-          C: { type: Type.STRING },
-          D: { type: Type.STRING },
-        },
-        required: ["A", "B", "C", "D"]
-      },
-      correctAnswer: { type: Type.STRING, description: "Must be 'A', 'B', 'C', or 'D'." }
-    },
-    required: ["question", "options", "correctAnswer"]
-  };
-  
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `Generate a random, ${difficulty} level, challenging but fun trivia question with four multiple-choice options (A, B, C, D) and specify the correct answer key. The topic can be anything from science, history, pop culture, or geography.`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: triviaQuestionSchema,
+    const response = await fetch('/api/generate-trivia', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({ difficulty }),
     });
 
-    const jsonText = response.text.trim();
-    const data = JSON.parse(jsonText);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      const serverMessage = errorData?.error || `Server responded with status ${response.status}`;
+      throw new Error(serverMessage);
+    }
+
+    const data = await response.json();
 
     if (
       typeof data.question === 'string' &&
@@ -186,12 +159,12 @@ async function generateTriviaQuestion(difficulty: Difficulty): Promise<TriviaQue
     ) {
       return data as TriviaQuestion;
     } else {
-      throw new Error("The AI returned data in an unexpected format.");
+      throw new Error("The API returned data in an unexpected format.");
     }
 
   } catch (error) {
-    console.error("Error fetching trivia question from Gemini API:", error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred with the AI service.';
+    console.error("Error fetching trivia question from API endpoint:", error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
     throw new Error(`Could not load question. ${errorMessage}`);
   }
 }
