@@ -1,3 +1,4 @@
+
 const CACHE_NAME = 'ai-trivia-quiz-v5'; // Incremented version
 const urlsToCache = [
   '/',
@@ -21,14 +22,8 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests
+  // Only handle GET requests for caching. API calls to Gemini are POST and will be ignored.
   if (event.request.method !== 'GET') {
-    return;
-  }
-
-  // Do not cache API calls. Always fetch them from the network.
-  if (event.request.url.includes('/api/')) {
-    event.respondWith(fetch(event.request));
     return;
   }
 

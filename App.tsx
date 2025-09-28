@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -129,16 +130,21 @@ const DifficultySelector: React.FC<DifficultySelectorProps> = ({ onSelectDifficu
   );
 };
 
+/**
+ * AI Service Initialization
+ * This initializes the Google GenAI client. It relies on the API_KEY being available
+ * as an environment variable, which is a secure practice.
+ */
+const apiKey = process.env.API_KEY;
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 /**
  * Fetches a trivia question directly from the Google Gemini API.
  */
 async function generateTriviaQuestion(difficulty: Difficulty): Promise<TriviaQuestion> {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error('API key is not configured. Please set the API_KEY environment variable.');
+  if (!ai) {
+    throw new Error("API key is not configured. Please ensure the API_KEY environment variable is set.");
   }
-  const ai = new GoogleGenAI({ apiKey });
 
   const triviaQuestionSchema = {
     type: Type.OBJECT,
@@ -158,7 +164,7 @@ async function generateTriviaQuestion(difficulty: Difficulty): Promise<TriviaQue
     },
     required: ["question", "options", "correctAnswer"]
   };
-
+  
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
@@ -180,12 +186,12 @@ async function generateTriviaQuestion(difficulty: Difficulty): Promise<TriviaQue
     ) {
       return data as TriviaQuestion;
     } else {
-      throw new Error("The API returned data in an unexpected format.");
+      throw new Error("The AI returned data in an unexpected format.");
     }
 
   } catch (error) {
     console.error("Error fetching trivia question from Gemini API:", error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred with the AI service.';
     throw new Error(`Could not load question. ${errorMessage}`);
   }
 }
