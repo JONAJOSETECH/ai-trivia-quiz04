@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import type { TriviaQuestion, AnswerKey, Difficulty } from './types';
 import { generateTriviaQuestion } from './services/geminiService';
@@ -6,6 +5,9 @@ import QuizCard from './components/QuizCard';
 import Scoreboard from './components/Scoreboard';
 import LoadingSpinner from './components/LoadingSpinner';
 import DifficultySelector from './components/DifficultySelector';
+import CategorySelector from './components/CategorySelector';
+
+const TIME_LIMIT = 15; // seconds
 
 const App: React.FC = () => {
   const [question, setQuestion] = useState<TriviaQuestion | null>(null);
@@ -14,10 +16,12 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedAnswer, setSelectedAnswer] = useState<AnswerKey | null>(null);
   const [isAnswered, setIsAnswered] = useState<boolean>(false);
+  const [category, setCategory] = useState<string | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
+  const [timeLeft, setTimeLeft] = useState<number>(TIME_LIMIT);
 
   const fetchNewQuestion = useCallback(async () => {
-    if (!difficulty) return;
+    if (!difficulty || !category) return;
 
     setIsLoading(true);
     setError(null);
@@ -25,21 +29,40 @@ const App: React.FC = () => {
     setIsAnswered(false);
     setQuestion(null);
     try {
-      const newQuestion = await generateTriviaQuestion(difficulty);
+      const newQuestion = await generateTriviaQuestion(difficulty, category);
       setQuestion(newQuestion);
+      setTimeLeft(TIME_LIMIT);
     } catch (err) {
       setError('Failed to generate a new question. Please try again.');
       console.error(err);
     } finally {
       setIsLoading(false);
     }
-  }, [difficulty]);
+  }, [difficulty, category]);
 
   useEffect(() => {
-    if (difficulty) {
+    if (difficulty && category) {
       fetchNewQuestion();
     }
-  }, [difficulty, fetchNewQuestion]);
+  }, [difficulty, category, fetchNewQuestion]);
+
+  useEffect(() => {
+    if (!question || isAnswered || isLoading) {
+      return;
+    }
+
+    if (timeLeft <= 0) {
+      setIsAnswered(true);
+      return;
+    }
+
+    const timerId = setInterval(() => {
+      setTimeLeft(prevTime => prevTime - 1);
+    }, 1000);
+
+    return () => clearInterval(timerId);
+  }, [timeLeft, isAnswered, question, isLoading]);
+
 
   const handleAnswerSelect = (answer: AnswerKey) => {
     if (isAnswered) return;
@@ -50,13 +73,37 @@ const App: React.FC = () => {
       setScore(prevScore => prevScore + 1);
     }
   };
+
+  const handleCategorySelect = (selectedCategory: string) => {
+    setCategory(selectedCategory);
+    setDifficulty(null);
+    setScore(0);
+  };
   
   const handleDifficultySelect = (selectedDifficulty: Difficulty) => {
     setScore(0);
     setDifficulty(selectedDifficulty);
   };
 
+  const resetCategory = () => {
+    setCategory(null);
+    setDifficulty(null);
+    setQuestion(null);
+    setScore(0);
+  }
+
+  const resetDifficulty = () => {
+    setDifficulty(null);
+    setQuestion(null);
+    setScore(0);
+  }
+
+
   const renderContent = () => {
+    if (!category) {
+      return <CategorySelector onSelectCategory={handleCategorySelect} />;
+    }
+
     if (!difficulty) {
       return <DifficultySelector onSelectDifficulty={handleDifficultySelect} />;
     }
@@ -77,10 +124,13 @@ const App: React.FC = () => {
     if (question) {
       return (
         <QuizCard
+          key={question.question}
           question={question}
           onAnswerSelect={handleAnswerSelect}
           selectedAnswer={selectedAnswer}
           isAnswered={isAnswered}
+          timeLeft={timeLeft}
+          timeLimit={TIME_LIMIT}
         />
       );
     }
@@ -96,7 +146,7 @@ const App: React.FC = () => {
           <p className="text-indigo-200 mt-2 text-lg">Powered by Gemini AI</p>
         </header>
 
-        <main className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl p-6 md:p-8 relative min-h-[400px] flex flex-col justify-between">
+        <main className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl p-6 md:p-8 relative min-h-[450px] flex flex-col justify-between">
           {difficulty && <Scoreboard score={score} />}
           
           <div className="flex-grow flex flex-col justify-center">
@@ -110,17 +160,22 @@ const App: React.FC = () => {
                 disabled={isLoading}
                 className="w-full md:w-auto px-8 py-3 bg-white text-indigo-600 font-bold rounded-full shadow-lg hover:bg-indigo-100 transform transition-transform duration-200 ease-in-out hover:scale-105 focus:outline-none focus:ring-4 focus:ring-indigo-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
               >
-                {isLoading ? 'Generating...' : 'Next Question'}
+                {isLoading ? 'Generating...' : isAnswered ? 'Next Question' : 'Skip Question'}
               </button>
             </div>
           )}
         </main>
         <footer className="text-center mt-8 text-indigo-200/80 text-sm">
-          {difficulty && (
-            <p>
-              <button onClick={() => setDifficulty(null)} className="underline hover:text-white transition-colors">
-                Change Difficulty
+          {category && (
+            <p className="space-x-4">
+              <button onClick={resetCategory} className="underline hover:text-white transition-colors">
+                Change Category
               </button>
+              {difficulty && (
+                <button onClick={resetDifficulty} className="underline hover:text-white transition-colors">
+                  Change Difficulty
+                </button>
+              )}
             </p>
           )}
           <p className="mt-2">&copy; {new Date().getFullYear()} AI Trivia Quiz. Endless fun, endless knowledge.</p>
